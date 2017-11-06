@@ -1,0 +1,736 @@
+{
+	"info": {
+		"name": "Deploy AutoScaling Docker Wordpress Multisite Cluster On AWS",
+		"_postman_id": "bd654c53-d225-8cdb-1cb5-6698499739a7",
+		"description": "",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Deploy High Availability WordPress Multisite",
+			"description": "In this guide, we are going to create and publish a HA WordPress Multisite cluster.\n\nCaylent Video Tutorial: https://www.youtube.com/watch?v=o07ytPajjrU",
+			"item": [
+				{
+					"name": "1.Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"tests[\"Content-Type is present\"] = postman.getResponseHeader(\"Content-Type\");",
+									"",
+									"tests[\"Access-Control-Allow-Headers is present\"] = postman.getResponseHeader(\"Access-Control-Allow-Headers\") ",
+									"tests[\"Access-Control-Allow-Methods is present\"] = postman.getResponseHeader(\"Access-Control-Allow-Methods\");",
+									"tests[\"Access-Control-Allow-Origin is present\"] = postman.getResponseHeader(\"Access-Control-Allow-Origin\");",
+									"",
+									"tests[\"Access-Control-Allow-Headers equals Origin, X-Requested-With, Content-Type, Accept\"] ",
+									"    = postman.getResponseHeader(\"Access-Control-Allow-Headers\") ",
+									"    === \"Origin, X-Requested-With, Content-Type, Accept, Authorization\";",
+									"tests[\"Access-Control-Allow-Methods is present\"] ",
+									"    = postman.getResponseHeader(\"Access-Control-Allow-Methods\")",
+									"    === \"GET, POST, PATCH, DELETE, OPTIONS\";",
+									"tests[\"Access-Control-Allow-Origin is present\"] ",
+									"    = postman.getResponseHeader(\"Access-Control-Allow-Origin\")",
+									"    === \"*\";",
+									"",
+									"",
+									"var jsonData = JSON.parse(responseBody);",
+									"tests[\"token is present\"] = jsonData.token;",
+									"",
+									"postman.clearEnvironmentVariable('token');",
+									"postman.setGlobalVariable(\"token\", jsonData.token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\" : \"{{username}}\",\n  \"password\" : \"{{password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{url}}/accounts/login",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"accounts",
+								"login"
+							]
+						},
+						"description": "If you haven't already, please login."
+					},
+					"response": []
+				},
+				{
+					"name": "2.Create Docker Stack",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"//tests[\"token is present\"] = jsonData.groups[0].uuid;",
+									"postman.clearEnvironmentVariable(\"stackUuid\");",
+									"//postman.setEnvironmentVariable(\"sscContainerUuid\", jsonData.groups[0].uuid);",
+									"postman.setEnvironmentVariable(\"stackUuid\", jsonData.uuid);",
+									"",
+									""
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"framework\": \"docker\",\n  \"type\": \"ha\",\n  \"name\" : \"wordpress-{{$timestamp}}\"\n}"
+						},
+						"url": {
+							"raw": "{{url}}/stacks",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"stacks"
+							]
+						},
+						"description": "This step creates a five-node auto scaling cluster."
+					},
+					"response": []
+				},
+				{
+					"name": "3.Create Database",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"postman.clearEnvironmentVariable(\"dbUuid\");",
+									"//postman.setEnvironmentVariable(\"sscContainerUuid\", jsonData.groups[0].uuid);",
+									"postman.setEnvironmentVariable(\"dbUuid\", jsonData.uuid);",
+									""
+								]
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var databaseName = \"this-is-new-arghh\";",
+									"postman.setEnvironmentVariable(\"databaseName\", databaseName);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"db_name\" : \"wpdb{{$timestamp}}\",\n  \"stack_uuid\" : \"{{stackUuid}}\",\n  \"db_type\" : \"mysql\"\n}\n  "
+						},
+						"url": {
+							"raw": "{{url}}/services/databases",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"services",
+								"databases"
+							]
+						},
+						"description": "This request will create a mysql RDS instance for our Wordpress application to use."
+					},
+					"response": []
+				},
+				{
+					"name": "4.Create EFS",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"stack_uuid\": \"{{stackUuid}}\"\n}"
+						},
+						"url": {
+							"raw": "{{url}}/efs",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"efs"
+							]
+						},
+						"description": "Wordpress requires a shared file system. For this, we are going to leverage AWS's Elastic File System (EFS). This simple request notifies our system to attach EFS to all nodes and mount the file system at /mnt/{{EFSUuid}}."
+					},
+					"response": []
+				},
+				{
+					"name": "5.Launch Stack",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"postman.clearEnvironmentVariable('actionUuid');",
+									"postman.setEnvironmentVariable('actionUuid', jsonData.uuid);",
+									"var date = new Date();",
+									"postman.setEnvironmentVariable('actionDeployTime', date.getTime());"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"action\":\"launch\",\n  \"comment\":\"This is awesome\"\n}"
+						},
+						"url": {
+							"raw": "{{url}}/stacks/{{stackUuid}}/actions",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"stacks",
+								"{{stackUuid}}",
+								"actions"
+							]
+						},
+						"description": "Launch and create the AWS resources for our cluster."
+					},
+					"response": [
+						{
+							"id": "4f04fd70-de8c-4192-823c-b06370ac00b5",
+							"name": "error",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"action\":\"launch\",\n  \"comment\":\"This is awesome\"\n}"
+								},
+								"url": {
+									"raw": "{{url}}/{{version}}/stacks/{{stackUuid}}/actions",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"{{version}}",
+										"stacks",
+										"{{stackUuid}}",
+										"actions"
+									]
+								}
+							},
+							"status": "Internal Server Error",
+							"code": 500,
+							"_postman_previewlanguage": "html",
+							"_postman_previewtype": "text",
+							"header": [
+								{
+									"description": "",
+									"key": "Access-Control-Allow-Headers",
+									"name": "Access-Control-Allow-Headers",
+									"value": "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+								},
+								{
+									"description": "",
+									"key": "Access-Control-Allow-Methods",
+									"name": "Access-Control-Allow-Methods",
+									"value": "GET, POST, PATCH, DELETE, OPTIONS"
+								},
+								{
+									"description": "",
+									"key": "Access-Control-Allow-Origin",
+									"name": "Access-Control-Allow-Origin",
+									"value": "*"
+								},
+								{
+									"description": "",
+									"key": "Cache-Control",
+									"name": "Cache-Control",
+									"value": "no-cache, private"
+								},
+								{
+									"description": "",
+									"key": "Connection",
+									"name": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"description": "",
+									"key": "Content-Type",
+									"name": "Content-Type",
+									"value": "text/html; charset=UTF-8"
+								},
+								{
+									"description": "",
+									"key": "Date",
+									"name": "Date",
+									"value": "Thu, 01 Dec 2016 17:25:06 GMT"
+								},
+								{
+									"description": "",
+									"key": "Server",
+									"name": "Server",
+									"value": "nginx/1.10.0"
+								},
+								{
+									"description": "",
+									"key": "transfer-encoding",
+									"name": "transfer-encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"responseTime": "30324",
+							"body": "<!DOCTYPE html>\n<html>\n    <head>\n        <meta name=\"robots\" content=\"noindex,nofollow\" />\n        <style>\n            /* Copyright (c) 2010, Yahoo! Inc. All rights reserved. Code licensed under the BSD License: http://developer.yahoo.com/yui/license.html */\n            html{color:#000;background:#FFF;}body,div,dl,dt,dd,ul,ol,li,h1,h2,h3,h4,h5,h6,pre,code,form,fieldset,legend,input,textarea,p,blockquote,th,td{margin:0;padding:0;}table{border-collapse:collapse;border-spacing:0;}fieldset,img{border:0;}address,caption,cite,code,dfn,em,strong,th,var{font-style:normal;font-weight:normal;}li{list-style:none;}caption,th{text-align:left;}h1,h2,h3,h4,h5,h6{font-size:100%;font-weight:normal;}q:before,q:after{content:'';}abbr,acronym{border:0;font-variant:normal;}sup{vertical-align:text-top;}sub{vertical-align:text-bottom;}input,textarea,select{font-family:inherit;font-size:inherit;font-weight:inherit;}input,textarea,select{*font-size:100%;}legend{color:#000;}\n            html { background: #eee; padding: 10px }\n            img { border: 0; }\n            #sf-resetcontent { width:970px; margin:0 auto; }\n                        .sf-reset { font: 11px Verdana, Arial, sans-serif; color: #333 }\n            .sf-reset .clear { clear:both; height:0; font-size:0; line-height:0; }\n            .sf-reset .clear_fix:after { display:block; height:0; clear:both; visibility:hidden; }\n            .sf-reset .clear_fix { display:inline-block; }\n            .sf-reset * html .clear_fix { height:1%; }\n            .sf-reset .clear_fix { display:block; }\n            .sf-reset, .sf-reset .block { margin: auto }\n            .sf-reset abbr { border-bottom: 1px dotted #000; cursor: help; }\n            .sf-reset p { font-size:14px; line-height:20px; color:#868686; padding-bottom:20px }\n            .sf-reset strong { font-weight:bold; }\n            .sf-reset a { color:#6c6159; cursor: default; }\n            .sf-reset a img { border:none; }\n            .sf-reset a:hover { text-decoration:underline; }\n            .sf-reset em { font-style:italic; }\n            .sf-reset h1, .sf-reset h2 { font: 20px Georgia, \"Times New Roman\", Times, serif }\n            .sf-reset .exception_counter { background-color: #fff; color: #333; padding: 6px; float: left; margin-right: 10px; float: left; display: block; }\n            .sf-reset .exception_title { margin-left: 3em; margin-bottom: 0.7em; display: block; }\n            .sf-reset .exception_message { margin-left: 3em; display: block; }\n            .sf-reset .traces li { font-size:12px; padding: 2px 4px; list-style-type:decimal; margin-left:20px; }\n            .sf-reset .block { background-color:#FFFFFF; padding:10px 28px; margin-bottom:20px;\n                -webkit-border-bottom-right-radius: 16px;\n                -webkit-border-bottom-left-radius: 16px;\n                -moz-border-radius-bottomright: 16px;\n                -moz-border-radius-bottomleft: 16px;\n                border-bottom-right-radius: 16px;\n                border-bottom-left-radius: 16px;\n                border-bottom:1px solid #ccc;\n                border-right:1px solid #ccc;\n                border-left:1px solid #ccc;\n            }\n            .sf-reset .block_exception { background-color:#ddd; color: #333; padding:20px;\n                -webkit-border-top-left-radius: 16px;\n                -webkit-border-top-right-radius: 16px;\n                -moz-border-radius-topleft: 16px;\n                -moz-border-radius-topright: 16px;\n                border-top-left-radius: 16px;\n                border-top-right-radius: 16px;\n                border-top:1px solid #ccc;\n                border-right:1px solid #ccc;\n                border-left:1px solid #ccc;\n                overflow: hidden;\n                word-wrap: break-word;\n            }\n            .sf-reset a { background:none; color:#868686; text-decoration:none; }\n            .sf-reset a:hover { background:none; color:#313131; text-decoration:underline; }\n            .sf-reset ol { padding: 10px 0; }\n            .sf-reset h1 { background-color:#FFFFFF; padding: 15px 28px; margin-bottom: 20px;\n                -webkit-border-radius: 10px;\n                -moz-border-radius: 10px;\n                border-radius: 10px;\n                border: 1px solid #ccc;\n            }\n        </style>\n    </head>\n    <body>\n                    <div id=\"sf-resetcontent\" class=\"sf-reset\">\n                <h1>Whoops, looks like something went wrong.</h1>\n                                        <h2 class=\"block_exception clear_fix\">\n                            <span class=\"exception_counter\">1/1</span>\n                            <span class=\"exception_title\"><abbr title=\"Swift_TransportException\">Swift_TransportException</abbr> in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 404\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 404</a>:</span>\n                            <span class=\"exception_message\">Connection to tcp://email-smtp.us-east-1.amazonaws.com:465 Timed Out</span>\n                        </h2>\n                        <div class=\"block\">\n                            <ol class=\"traces list_exception\">       <li> in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 404\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 404</a></li>\n       <li>at <abbr title=\"Swift_Transport_AbstractSmtpTransport\">Swift_Transport_AbstractSmtpTransport</abbr>->_getFullResponse('0') in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 289\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 289</a></li>\n       <li>at <abbr title=\"Swift_Transport_AbstractSmtpTransport\">Swift_Transport_AbstractSmtpTransport</abbr>->_readGreeting() in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 117\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 117</a></li>\n       <li>at <abbr title=\"Swift_Transport_AbstractSmtpTransport\">Swift_Transport_AbstractSmtpTransport</abbr>->start() in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Mailer.php line 79\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 79</a></li>\n       <li>at <abbr title=\"Swift_Mailer\">Swift_Mailer</abbr>->send(<em>object</em>(<abbr title=\"Swift_Message\">Swift_Message</abbr>), <em>array</em>()) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Mail/Mailer.php line 386\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 386</a></li>\n       <li>at <abbr title=\"Illuminate\\Mail\\Mailer\">Mailer</abbr>->sendSwiftMessage(<em>object</em>(<abbr title=\"Swift_Message\">Swift_Message</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Mail/Mailer.php line 173\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 173</a></li>\n       <li>at <abbr title=\"Illuminate\\Mail\\Mailer\">Mailer</abbr>->send(<em>null</em>, <em>array</em>('message' => <em>object</em>(<abbr title=\"Illuminate\\Mail\\Message\">Message</abbr>)), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Mail/Mailer.php line 125\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 125</a></li>\n       <li>at <abbr title=\"Illuminate\\Mail\\Mailer\">Mailer</abbr>->raw('Provider Configuration launch action failed.', <em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 6253\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 6253</a></li>\n       <li>at <abbr title=\"Illuminate\\Support\\Facades\\Facade\">Facade</abbr>::__callStatic('raw', <em>array</em>('Provider Configuration launch action failed.', <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))) in <a title=\"/usr/share/nginx/html/app/Services/NotificationService.php line 105\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NotificationService.php line 105</a></li>\n       <li>at <abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>->emailUserNotification(<em>object</em>(<abbr title=\"App\\Models\\Notification\\UserNotification\">UserNotification</abbr>)) in <a title=\"/usr/share/nginx/html/app/Services/NotificationService.php line 95\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NotificationService.php line 95</a></li>\n       <li>at <abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>->generateActionNotification(<em>object</em>(<abbr title=\"App\\Models\\Actions\\ProviderConfigAction\">ProviderConfigAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Services/NotificationService.php line 51\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NotificationService.php line 51</a></li>\n       <li>at <abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>->onAfterAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>), 'onAfterAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/ProviderConfigManager.php line 135\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">ProviderConfigManager.php line 135</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\ProviderConfigManager\">ProviderConfigManager</abbr>->onBeforeProviderConfigAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Providers\\ResourceManagers\\ProviderConfigManager\">ProviderConfigManager</abbr>), 'onBeforeProviderConfigAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/ProviderConfigManager.php line 42\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">ProviderConfigManager.php line 42</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\ProviderConfigManager\">ProviderConfigManager</abbr>->executeProviderConfigAction(<em>object</em>(<abbr title=\"App\\Models\\Actions\\ProviderConfigAction\">ProviderConfigAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/NetworkManager.php line 72\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NetworkManager.php line 72</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>->prepareForNetworkLaunch(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/NetworkManager.php line 106\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NetworkManager.php line 106</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>->onBeforeNetworkAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>), 'onBeforeNetworkAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/NetworkManager.php line 45\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NetworkManager.php line 45</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>->executeNetworkAction(<em>object</em>(<abbr title=\"App\\Models\\Actions\\NetworkAction\">NetworkAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/StackManager.php line 165\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackManager.php line 165</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>->prepareForStackLaunch(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/StackManager.php line 207\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackManager.php line 207</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>->onBeforeStackAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>), 'onBeforeStackAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/StackManager.php line 66\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackManager.php line 66</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>->executeStackAction(<em>object</em>(<abbr title=\"App\\Models\\Actions\\StackAction\">StackAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Http/Controllers/Resources/StackActionsController.php line 59\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackActionsController.php line 59</a></li>\n       <li>at <abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>->postIndex(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), '3aca29da-fe3a-44c1-a084-2338694af350')</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>), 'postIndex'), <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'uuid' => '3aca29da-fe3a-44c1-a084-2338694af350')) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9282\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9282</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Controller\">Controller</abbr>->callAction('postIndex', <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'uuid' => '3aca29da-fe3a-44c1-a084-2338694af350')) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9344\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9344</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->call(<em>object</em>(<abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), 'postIndex') in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9324\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9324</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 52\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 52</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9801\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9801</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->then(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9325\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9325</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->callWithinStack(<em>object</em>(<abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'postIndex') in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9312\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9312</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->dispatch(<em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'App\\Http\\Controllers\\Resources\\StackActionsController', 'postIndex') in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8401\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8401</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>->runController(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8388\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8388</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>->run(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8102\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8102</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 52\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 52</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/tymon/jwt-auth/src/Http/Middleware/Authenticate.php line 32\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Authenticate.php line 32</a></li>\n       <li>at <abbr title=\"Tymon\\JWTAuth\\Http\\Middleware\\Authenticate\">Authenticate</abbr>->handle(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"Tymon\\JWTAuth\\Http\\Middleware\\Authenticate\">Authenticate</abbr>), 'handle'), <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9811\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9811</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->Illuminate\\Pipeline\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 32\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 32</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9801\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9801</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->then(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8103\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8103</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->runRouteWithinStack(<em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8094\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8094</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->dispatchToRoute(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8084\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8084</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->dispatch(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 2381\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 2381</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Kernel\">Kernel</abbr>->Illuminate\\Foundation\\Http\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 52\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 52</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 3214\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 3214</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Middleware\\CheckForMaintenanceMode\">CheckForMaintenanceMode</abbr>->handle(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Foundation\\Http\\Middleware\\CheckForMaintenanceMode\">CheckForMaintenanceMode</abbr>), 'handle'), <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9811\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9811</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->Illuminate\\Pipeline\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 32\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 32</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9801\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9801</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->then(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 2328\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 2328</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Kernel\">Kernel</abbr>->sendRequestThroughRouter(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 2312\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 2312</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Kernel\">Kernel</abbr>->handle(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/public/index.php line 53\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">index.php line 53</a></li>\n    </ol>\n</div>\n\n            </div>\n    </body>\n</html>"
+						},
+						{
+							"id": "d93bbac0-0c99-4d6d-a309-e3497cb77ff3",
+							"name": "error",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"action\":\"launch\",\n  \"comment\":\"This is awesome\"\n}"
+								},
+								"url": {
+									"raw": "{{url}}/{{version}}/stacks/{{stackUuid}}/actions",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"{{version}}",
+										"stacks",
+										"{{stackUuid}}",
+										"actions"
+									]
+								}
+							},
+							"status": "Internal Server Error",
+							"code": 500,
+							"_postman_previewlanguage": "html",
+							"_postman_previewtype": "text",
+							"header": [
+								{
+									"description": "",
+									"key": "Access-Control-Allow-Headers",
+									"name": "Access-Control-Allow-Headers",
+									"value": "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+								},
+								{
+									"description": "",
+									"key": "Access-Control-Allow-Methods",
+									"name": "Access-Control-Allow-Methods",
+									"value": "GET, POST, PATCH, DELETE, OPTIONS"
+								},
+								{
+									"description": "",
+									"key": "Access-Control-Allow-Origin",
+									"name": "Access-Control-Allow-Origin",
+									"value": "*"
+								},
+								{
+									"description": "",
+									"key": "Cache-Control",
+									"name": "Cache-Control",
+									"value": "no-cache, private"
+								},
+								{
+									"description": "",
+									"key": "Connection",
+									"name": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"description": "",
+									"key": "Content-Type",
+									"name": "Content-Type",
+									"value": "text/html; charset=UTF-8"
+								},
+								{
+									"description": "",
+									"key": "Date",
+									"name": "Date",
+									"value": "Thu, 01 Dec 2016 17:25:06 GMT"
+								},
+								{
+									"description": "",
+									"key": "Server",
+									"name": "Server",
+									"value": "nginx/1.10.0"
+								},
+								{
+									"description": "",
+									"key": "transfer-encoding",
+									"name": "transfer-encoding",
+									"value": "chunked"
+								}
+							],
+							"cookie": [],
+							"responseTime": "30324",
+							"body": "<!DOCTYPE html>\n<html>\n    <head>\n        <meta name=\"robots\" content=\"noindex,nofollow\" />\n        <style>\n            /* Copyright (c) 2010, Yahoo! Inc. All rights reserved. Code licensed under the BSD License: http://developer.yahoo.com/yui/license.html */\n            html{color:#000;background:#FFF;}body,div,dl,dt,dd,ul,ol,li,h1,h2,h3,h4,h5,h6,pre,code,form,fieldset,legend,input,textarea,p,blockquote,th,td{margin:0;padding:0;}table{border-collapse:collapse;border-spacing:0;}fieldset,img{border:0;}address,caption,cite,code,dfn,em,strong,th,var{font-style:normal;font-weight:normal;}li{list-style:none;}caption,th{text-align:left;}h1,h2,h3,h4,h5,h6{font-size:100%;font-weight:normal;}q:before,q:after{content:'';}abbr,acronym{border:0;font-variant:normal;}sup{vertical-align:text-top;}sub{vertical-align:text-bottom;}input,textarea,select{font-family:inherit;font-size:inherit;font-weight:inherit;}input,textarea,select{*font-size:100%;}legend{color:#000;}\n            html { background: #eee; padding: 10px }\n            img { border: 0; }\n            #sf-resetcontent { width:970px; margin:0 auto; }\n                        .sf-reset { font: 11px Verdana, Arial, sans-serif; color: #333 }\n            .sf-reset .clear { clear:both; height:0; font-size:0; line-height:0; }\n            .sf-reset .clear_fix:after { display:block; height:0; clear:both; visibility:hidden; }\n            .sf-reset .clear_fix { display:inline-block; }\n            .sf-reset * html .clear_fix { height:1%; }\n            .sf-reset .clear_fix { display:block; }\n            .sf-reset, .sf-reset .block { margin: auto }\n            .sf-reset abbr { border-bottom: 1px dotted #000; cursor: help; }\n            .sf-reset p { font-size:14px; line-height:20px; color:#868686; padding-bottom:20px }\n            .sf-reset strong { font-weight:bold; }\n            .sf-reset a { color:#6c6159; cursor: default; }\n            .sf-reset a img { border:none; }\n            .sf-reset a:hover { text-decoration:underline; }\n            .sf-reset em { font-style:italic; }\n            .sf-reset h1, .sf-reset h2 { font: 20px Georgia, \"Times New Roman\", Times, serif }\n            .sf-reset .exception_counter { background-color: #fff; color: #333; padding: 6px; float: left; margin-right: 10px; float: left; display: block; }\n            .sf-reset .exception_title { margin-left: 3em; margin-bottom: 0.7em; display: block; }\n            .sf-reset .exception_message { margin-left: 3em; display: block; }\n            .sf-reset .traces li { font-size:12px; padding: 2px 4px; list-style-type:decimal; margin-left:20px; }\n            .sf-reset .block { background-color:#FFFFFF; padding:10px 28px; margin-bottom:20px;\n                -webkit-border-bottom-right-radius: 16px;\n                -webkit-border-bottom-left-radius: 16px;\n                -moz-border-radius-bottomright: 16px;\n                -moz-border-radius-bottomleft: 16px;\n                border-bottom-right-radius: 16px;\n                border-bottom-left-radius: 16px;\n                border-bottom:1px solid #ccc;\n                border-right:1px solid #ccc;\n                border-left:1px solid #ccc;\n            }\n            .sf-reset .block_exception { background-color:#ddd; color: #333; padding:20px;\n                -webkit-border-top-left-radius: 16px;\n                -webkit-border-top-right-radius: 16px;\n                -moz-border-radius-topleft: 16px;\n                -moz-border-radius-topright: 16px;\n                border-top-left-radius: 16px;\n                border-top-right-radius: 16px;\n                border-top:1px solid #ccc;\n                border-right:1px solid #ccc;\n                border-left:1px solid #ccc;\n                overflow: hidden;\n                word-wrap: break-word;\n            }\n            .sf-reset a { background:none; color:#868686; text-decoration:none; }\n            .sf-reset a:hover { background:none; color:#313131; text-decoration:underline; }\n            .sf-reset ol { padding: 10px 0; }\n            .sf-reset h1 { background-color:#FFFFFF; padding: 15px 28px; margin-bottom: 20px;\n                -webkit-border-radius: 10px;\n                -moz-border-radius: 10px;\n                border-radius: 10px;\n                border: 1px solid #ccc;\n            }\n        </style>\n    </head>\n    <body>\n                    <div id=\"sf-resetcontent\" class=\"sf-reset\">\n                <h1>Whoops, looks like something went wrong.</h1>\n                                        <h2 class=\"block_exception clear_fix\">\n                            <span class=\"exception_counter\">1/1</span>\n                            <span class=\"exception_title\"><abbr title=\"Swift_TransportException\">Swift_TransportException</abbr> in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 404\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 404</a>:</span>\n                            <span class=\"exception_message\">Connection to tcp://email-smtp.us-east-1.amazonaws.com:465 Timed Out</span>\n                        </h2>\n                        <div class=\"block\">\n                            <ol class=\"traces list_exception\">       <li> in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 404\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 404</a></li>\n       <li>at <abbr title=\"Swift_Transport_AbstractSmtpTransport\">Swift_Transport_AbstractSmtpTransport</abbr>->_getFullResponse('0') in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 289\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 289</a></li>\n       <li>at <abbr title=\"Swift_Transport_AbstractSmtpTransport\">Swift_Transport_AbstractSmtpTransport</abbr>->_readGreeting() in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Transport/AbstractSmtpTransport.php line 117\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">AbstractSmtpTransport.php line 117</a></li>\n       <li>at <abbr title=\"Swift_Transport_AbstractSmtpTransport\">Swift_Transport_AbstractSmtpTransport</abbr>->start() in <a title=\"/usr/share/nginx/html/vendor/swiftmailer/swiftmailer/lib/classes/Swift/Mailer.php line 79\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 79</a></li>\n       <li>at <abbr title=\"Swift_Mailer\">Swift_Mailer</abbr>->send(<em>object</em>(<abbr title=\"Swift_Message\">Swift_Message</abbr>), <em>array</em>()) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Mail/Mailer.php line 386\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 386</a></li>\n       <li>at <abbr title=\"Illuminate\\Mail\\Mailer\">Mailer</abbr>->sendSwiftMessage(<em>object</em>(<abbr title=\"Swift_Message\">Swift_Message</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Mail/Mailer.php line 173\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 173</a></li>\n       <li>at <abbr title=\"Illuminate\\Mail\\Mailer\">Mailer</abbr>->send(<em>null</em>, <em>array</em>('message' => <em>object</em>(<abbr title=\"Illuminate\\Mail\\Message\">Message</abbr>)), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Mail/Mailer.php line 125\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Mailer.php line 125</a></li>\n       <li>at <abbr title=\"Illuminate\\Mail\\Mailer\">Mailer</abbr>->raw('Provider Configuration launch action failed.', <em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 6253\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 6253</a></li>\n       <li>at <abbr title=\"Illuminate\\Support\\Facades\\Facade\">Facade</abbr>::__callStatic('raw', <em>array</em>('Provider Configuration launch action failed.', <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))) in <a title=\"/usr/share/nginx/html/app/Services/NotificationService.php line 105\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NotificationService.php line 105</a></li>\n       <li>at <abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>->emailUserNotification(<em>object</em>(<abbr title=\"App\\Models\\Notification\\UserNotification\">UserNotification</abbr>)) in <a title=\"/usr/share/nginx/html/app/Services/NotificationService.php line 95\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NotificationService.php line 95</a></li>\n       <li>at <abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>->generateActionNotification(<em>object</em>(<abbr title=\"App\\Models\\Actions\\ProviderConfigAction\">ProviderConfigAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Services/NotificationService.php line 51\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NotificationService.php line 51</a></li>\n       <li>at <abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>->onAfterAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Services\\NotificationService\">NotificationService</abbr>), 'onAfterAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\AfterProviderConfigActionEvent\">AfterProviderConfigActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/ProviderConfigManager.php line 135\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">ProviderConfigManager.php line 135</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\ProviderConfigManager\">ProviderConfigManager</abbr>->onBeforeProviderConfigAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Providers\\ResourceManagers\\ProviderConfigManager\">ProviderConfigManager</abbr>), 'onBeforeProviderConfigAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\ProviderConfigActionEvents\\BeforeProviderConfigActionEvent\">BeforeProviderConfigActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/ProviderConfigManager.php line 42\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">ProviderConfigManager.php line 42</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\ProviderConfigManager\">ProviderConfigManager</abbr>->executeProviderConfigAction(<em>object</em>(<abbr title=\"App\\Models\\Actions\\ProviderConfigAction\">ProviderConfigAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/NetworkManager.php line 72\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NetworkManager.php line 72</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>->prepareForNetworkLaunch(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/NetworkManager.php line 106\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NetworkManager.php line 106</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>->onBeforeNetworkAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>), 'onBeforeNetworkAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\NetworkActionEvents\\BeforeNetworkActionEvent\">BeforeNetworkActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/NetworkManager.php line 45\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">NetworkManager.php line 45</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\NetworkManager\">NetworkManager</abbr>->executeNetworkAction(<em>object</em>(<abbr title=\"App\\Models\\Actions\\NetworkAction\">NetworkAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/StackManager.php line 165\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackManager.php line 165</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>->prepareForStackLaunch(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/StackManager.php line 207\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackManager.php line 207</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>->onBeforeStackAction(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>), 'onBeforeStackAction'), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 10038\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 10038</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->Illuminate\\Events\\{closure}(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9983\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9983</a></li>\n       <li>at <abbr title=\"Illuminate\\Events\\Dispatcher\">Dispatcher</abbr>->fire('App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent', <em>array</em>(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>)), <em>false</em>) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Foundation/helpers.php line 418\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">helpers.php line 418</a></li>\n       <li>at <abbr title=\"\"></abbr>event(<em>object</em>(<abbr title=\"App\\Events\\ResourceActionEvents\\StackActionEvents\\BeforeStackActionEvent\">BeforeStackActionEvent</abbr>)) in <a title=\"/usr/share/nginx/html/app/Providers/ResourceManagers/StackManager.php line 66\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackManager.php line 66</a></li>\n       <li>at <abbr title=\"App\\Providers\\ResourceManagers\\StackManager\">StackManager</abbr>->executeStackAction(<em>object</em>(<abbr title=\"App\\Models\\Actions\\StackAction\">StackAction</abbr>)) in <a title=\"/usr/share/nginx/html/app/Http/Controllers/Resources/StackActionsController.php line 59\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">StackActionsController.php line 59</a></li>\n       <li>at <abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>->postIndex(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), '3aca29da-fe3a-44c1-a084-2338694af350')</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>), 'postIndex'), <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'uuid' => '3aca29da-fe3a-44c1-a084-2338694af350')) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9282\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9282</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Controller\">Controller</abbr>->callAction('postIndex', <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'uuid' => '3aca29da-fe3a-44c1-a084-2338694af350')) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9344\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9344</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->call(<em>object</em>(<abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), 'postIndex') in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9324\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9324</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 52\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 52</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9801\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9801</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->then(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9325\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9325</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->callWithinStack(<em>object</em>(<abbr title=\"App\\Http\\Controllers\\Resources\\StackActionsController\">StackActionsController</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'postIndex') in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9312\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9312</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\ControllerDispatcher\">ControllerDispatcher</abbr>->dispatch(<em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), 'App\\Http\\Controllers\\Resources\\StackActionsController', 'postIndex') in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8401\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8401</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>->runController(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8388\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8388</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>->run(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8102\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8102</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 52\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 52</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/tymon/jwt-auth/src/Http/Middleware/Authenticate.php line 32\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Authenticate.php line 32</a></li>\n       <li>at <abbr title=\"Tymon\\JWTAuth\\Http\\Middleware\\Authenticate\">Authenticate</abbr>->handle(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"Tymon\\JWTAuth\\Http\\Middleware\\Authenticate\">Authenticate</abbr>), 'handle'), <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9811\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9811</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->Illuminate\\Pipeline\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 32\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 32</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9801\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9801</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->then(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8103\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8103</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->runRouteWithinStack(<em>object</em>(<abbr title=\"Illuminate\\Routing\\Route\">Route</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8094\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8094</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->dispatchToRoute(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 8084\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 8084</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Router\">Router</abbr>->dispatch(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 2381\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 2381</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Kernel\">Kernel</abbr>->Illuminate\\Foundation\\Http\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 52\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 52</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 3214\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 3214</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Middleware\\CheckForMaintenanceMode\">CheckForMaintenanceMode</abbr>->handle(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func_array(<em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Foundation\\Http\\Middleware\\CheckForMaintenanceMode\">CheckForMaintenanceMode</abbr>), 'handle'), <em>array</em>(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>), <em>object</em>(<abbr title=\"Closure\">Closure</abbr>))) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9811\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9811</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->Illuminate\\Pipeline\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/vendor/laravel/framework/src/Illuminate/Routing/Pipeline.php line 32\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">Pipeline.php line 32</a></li>\n       <li>at <abbr title=\"Illuminate\\Routing\\Pipeline\">Pipeline</abbr>->Illuminate\\Routing\\{closure}(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>))</li>\n       <li>at <abbr title=\"\"></abbr>call_user_func(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>), <em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 9801\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 9801</a></li>\n       <li>at <abbr title=\"Illuminate\\Pipeline\\Pipeline\">Pipeline</abbr>->then(<em>object</em>(<abbr title=\"Closure\">Closure</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 2328\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 2328</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Kernel\">Kernel</abbr>->sendRequestThroughRouter(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/bootstrap/cache/compiled.php line 2312\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">compiled.php line 2312</a></li>\n       <li>at <abbr title=\"Illuminate\\Foundation\\Http\\Kernel\">Kernel</abbr>->handle(<em>object</em>(<abbr title=\"Illuminate\\Http\\Request\">Request</abbr>)) in <a title=\"/usr/share/nginx/html/public/index.php line 53\" ondblclick=\"var f=this.innerHTML;this.innerHTML=this.title;this.title=f;\">index.php line 53</a></li>\n    </ol>\n</div>\n\n            </div>\n    </body>\n</html>"
+						}
+					]
+				},
+				{
+					"name": "6.Create Mount",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"postman.clearEnvironmentVariable(\"mountUuid\");",
+									"postman.setEnvironmentVariable(\"mountUuid\", jsonData.uuid);",
+									"",
+									"",
+									"tests[\"Status code is 200\"] = responseCode.code === 201;",
+									"tests[\"source is correct\"] = jsonData.source === \"{{efs}}/wordpress\";",
+									"tests[\"Target is correct\"] = jsonData.target === \"/var/www/html\";",
+									"tests[\"Type equals bind\"] = jsonData.type === \"bind\";",
+									"tests['Read Only is boolean and false'] = jsonData.read_only === false;",
+									""
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"type\": \"bind\",\n  \"source\": \"{{efs}}/wordpress\",\n  \"target\": \"/var/www/html\",\n  \"read_only\":false\n}"
+						},
+						"url": {
+							"raw": "{{url}}/mounts",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"mounts"
+							]
+						},
+						"description": "Our WordPress Docker service will need to know to use a bind mount. This request creates the bind mount object. Later, we will attach it to the application."
+					},
+					"response": []
+				},
+				{
+					"name": "7.Create WordPress Multisite App",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"postman.clearEnvironmentVariable(\"appUuid\");",
+									"postman.setEnvironmentVariable(\"appUuid\", jsonData.uuid)"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\" : \"wordpress-{{$timestamp}}\",\n  \"image_uri\" : \"wordpress\",\n  \"type\" : \"docker\",\n  \"default_version\" : \"latest\",\n  \"stack_uuids\" : [\"{{stackUuid}}\"],\n  \"number_containers\" : 5,\n  \"ports\": [\"80:80\"],\n  \"config\":{\n      \"apps\": {\n        \"wordpress-{{$timestamp}}\":{\n          \"env_vars\": {\n            \"WORDPRESS_DB_HOST\": \"{{database.host}}\",\n            \"WORDPRESS_DB_NAME\": \"{{database.name}}\",\n            \"WORDPRESS_DB_USER\": \"{{database.username}}\",\n            \"WORDPRESS_DB_PASSWORD\": \"{{database.password}}\",\n            \"APP_ENV\": \"{{stack.env}}\"\n          }\n        }\n      }\n   }\n }"
+						},
+						"url": {
+							"raw": "{{url}}/applications",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"applications"
+							]
+						},
+						"description": "Create the actual WordPress container."
+					},
+					"response": []
+				},
+				{
+					"name": "8.Add mount to App",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"mount_uuid\": \"{{mountUuid}}\"\n}"
+						},
+						"url": {
+							"raw": "{{url}}/applications/{{appUuid}}/mounts/add",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"applications",
+								"{{appUuid}}",
+								"mounts",
+								"add"
+							]
+						},
+						"description": "Attach the previously created bind mount to the application."
+					},
+					"response": []
+				},
+				{
+					"name": "9.WordPress Stack - Loop Until Deployed Copy",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Ensure the name of the method matches ",
+									"// model, loop until testState",
+									"// i.e. Stack, loop until deployed",
+									"",
+									"var testState = 'deployed';",
+									"var model = 'Wordpress Stack';",
+									"",
+									"function pausecomp(millis)",
+									" {",
+									"  var date = new Date();",
+									"  var curDate = null;",
+									"  do { curDate = new Date(); }",
+									"  while(curDate-date < millis);",
+									"}",
+									"var date = new Date();",
+									"var jsonData = JSON.parse(responseBody);",
+									"",
+									"if (jsonData.state !== testState) {",
+									"    var timeoutAt = parseInt(environment.actionDeployTime) + parseInt(environment.timeout_interval_mins) * 60000;",
+									"    postman.setEnvironmentVariable('currentTime', date.getTime())",
+									"    var timedOut = environment.currentTime > timeoutAt;",
+									"    if(timedOut) {",
+									"        tests[`${model} failed to return ${testState} within the alotted time`] = false;",
+									"        postman.setNextRequest(null);",
+									"    }else{",
+									"        tests[`Not timed out. Timeout at: ${timeoutAt}. Time Now:  ${environment.currentTime}`] = true;",
+									"        pausecomp(10000);",
+									"        postman.setNextRequest(`${model}, loop until ${testState}`);",
+									"    }",
+									"}else if (jsonData.state === testState) {",
+									"    tests[`${model} is ${testState}`] = true;",
+									"    postman.clearEnvironmentVariable('awsStackId');",
+									"    postman.setEnvironmentVariable('awsStackId', jsonData.provider_id)",
+									"}",
+									"",
+									""
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "{{url}}/stacks/{{stackUuid}}",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"stacks",
+								"{{stackUuid}}"
+							]
+						},
+						"description": "Check the status of our infrastructure deployment. Repeat this step until stack is fully deployed."
+					},
+					"response": []
+				},
+				{
+					"name": "10.Deploy WordPress App to Stack",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									""
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"action\":\"deploy\",\n  \"comment\":\"My easy ha wordpress deployment\",\n  \"stack_uuid\": \"{{stackUuid}}\"\n}"
+						},
+						"url": {
+							"raw": "{{url}}/applications/{{appUuid}}/actions",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"applications",
+								"{{appUuid}}",
+								"actions"
+							]
+						},
+						"description": "Create the Docker service on the swarm cluster."
+					},
+					"response": []
+				},
+				{
+					"name": "11.List All Nodes - Filter Stack",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var jsonData = JSON.parse(responseBody);",
+									"postman.clearEnvironmentVariable(\"nodeUuid\");",
+									"postman.setEnvironmentVariable(\"nodeUuid\", jsonData[0].uuid);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "{{url}}/nodes?stack_uuid={{stackUuid}}",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"nodes"
+							],
+							"query": [
+								{
+									"key": "stack_uuid",
+									"value": "{{stackUuid}}",
+									"equals": true
+								}
+							]
+						},
+						"description": "List all nodes and endpoints, so you can access the wp-install on a single instance."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
